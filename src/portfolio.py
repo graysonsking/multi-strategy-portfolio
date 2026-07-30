@@ -1,1 +1,1 @@
-"""Portfolio construction and allocation functions."""
+""Portfolio construction and allocation functions.""
