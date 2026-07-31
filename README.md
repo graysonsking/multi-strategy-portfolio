@@ -138,34 +138,49 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run a single strategy:
+Reproduce every published number with one command:
 
 ```bash
-python -m src.backtest.run --strategy momentum --start 2000-01-01 --end 2025-12-31
+python run_results.py
 ```
 
-Compare weighting schemes on the same universe:
+This downloads the universe from Yahoo Finance, caches it to `cache/`, runs all
+five strategies and both benchmarks on an identical schedule, and writes
+`results/summary.csv`, `results/summary.md`, and the two figures under
+`docs/images/`.
+
+Verify the pipeline without a network first:
 
 ```bash
-python -m src.backtest.run --compare equal_weight,min_variance,risk_parity
+python run_results.py --offline
 ```
+
+Override the defaults for sensitivity work:
+
+```bash
+python run_results.py --start 2010-01-01 --cost-bps 25
+```
+
+All settings live in `config.py`: universe, sample window, estimation window,
+cost rate, optimizer parameters, and the benchmark definitions. Edit that file
+rather than the runner.
 
 Use the engine directly:
 
 ```python
+import pandas as pd
 from src.backtest import Backtester
 from strategies.momentum import weights_fn
 
 bt = Backtester(
-    start="2000-01-01",
-    end="2025-12-31",
-    rebalance="M",
+    asset_returns=monthly_returns,   # DataFrame, DatetimeIndex
+    lookback=60,
+    rebalance="ME",
     cost_bps=10,
 )
 
-result = bt.run(weights_fn)
+result = bt.run(lambda r, d: weights_fn(r, d, top_n=4))
 print(result.summary())
-result.plot_equity_curve()
 ```
 
 ---
@@ -180,29 +195,103 @@ python -m pytest tests -q
 
 ## Results
 
-Replace the placeholder values below with output from your own runs. Do not publish numbers you have not reproduced.
+Every number below is produced by `python run_results.py`. Full statistics and
+the complete parameter set are written to
+[results/summary.md](results/summary.md) on each run.
 
-| Strategy | CAGR | Volatility | Sharpe | Max Drawdown | Turnover |
-|---|---|---|---|---|---|
-| Equal weight | — | — | — | — | — |
-| Momentum | — | — | — | — | — |
-| Minimum variance | — | — | — | — | — |
-| Risk parity | — | — | — | — | — |
-| S&P 500 benchmark | — | — | — | — | — |
+**Trading period 2012-02 to 2026-07.** Monthly rebalance, 60-month trailing
+estimation window, 10 bps one-way transaction costs charged on turnover. The
+data sample begins 2007-02; the first 60 months are the estimation burn-in and
+are excluded from every statistic. Benchmarks are measured over the identical
+window and pay the identical cost schedule, so the 60/40 blend is charged for
+its monthly rebalancing rather than getting it free.
 
-Add an equity curve image here once generated:
+| Strategy | CAGR | Volatility | Sharpe | Max Drawdown | Beta | Avg Turnover |
+|---|---|---|---|---|---|---|
+| Equal weight | 5.75% | 8.56% | 0.70 | -19.02% | 0.50 | 0.00 |
+| Inverse volatility | 4.71% | 7.03% | 0.69 | -18.06% | 0.38 | 0.01 |
+| Minimum variance | 3.67% | 5.20% | 0.72 | -14.35% | 0.21 | 0.02 |
+| Risk parity | 4.80% | 7.03% | 0.70 | -18.07% | 0.36 | 0.02 |
+| Momentum | 7.49% | 11.66% | 0.68 | -18.18% | 0.59 | 0.18 |
+| **SPY buy and hold** | **14.71%** | **14.01%** | **1.05** | **-23.93%** | — | 0.00 |
+| **60/40 SPY/IEF** | **9.40%** | **8.94%** | **1.05** | **-20.51%** | 0.61 | 0.01 |
 
-```markdown
 ![Equity curves](docs/images/equity_curves.png)
-```
+
+![Drawdowns](docs/images/drawdowns.png)
+
+### Findings
+
+This is a negative result. None of the five weighting schemes beat either
+benchmark on any risk-adjusted measure. Information ratios against SPY run
+from -0.68 to -1.04.
+
+**A two-asset blend dominated at matched volatility.** Equal weight ran at
+8.56% volatility and returned 5.75%. A 60/40 SPY/IEF portfolio ran at 8.94%
+volatility, statistically the same risk, and returned 9.40%. Sharpe 0.70
+against 1.05. Twelve asset classes, a Ledoit-Wolf shrinkage estimator, and a
+constrained optimizer produced 3.65 points a year less than two tickers and a
+rebalance rule.
+
+**The choice of weighting scheme barely mattered.** Sharpe ratios of 0.70,
+0.69, 0.72, 0.70, and 0.68 across five methods. That spread is noise. Universe
+selection dominated optimizer selection completely, which is the opposite of
+where the modelling effort went.
+
+**The risk reduction was real but poorly priced.** Minimum variance did post
+the lowest drawdown at -14.35%, and that is a genuine result. But it ran at
+5.20% volatility against 60/40's 8.94%. Scaling it naively to matched
+volatility, ignoring borrowing cost, implies roughly 6.3% CAGR and a drawdown
+near -25%: worse than 60/40 on both counts. The shallower drawdown was bought
+by holding less risk, not by diversifying better.
+
+**Diversification failed in the one period it was needed.** The drawdown chart
+separates two stress events cleanly. In early 2020 SPY fell about -19.5% while
+the strategies held near -10%, because bonds rallied as equities sold off. In
+late 2022 the same portfolios converged with the benchmark: SPY -23.93%, 60/40
+-20.51%, strategies -18% to -19%. 2022 was a joint stock and bond selloff, and
+correlation-based diversification has nothing to offer when the diversifiers
+fall together. The protection was available when it was cheap and absent when
+it was expensive.
+
+**Low betas explain the return gap.** Realised betas to SPY ran 0.21 to 0.59.
+Over a period when US large cap compounded at 14.71%, these portfolios were
+structurally underweight the asset doing the work. Minimum variance sat at 0.21
+beta with 4.57 effective holdings, meaning shrinkage plus the 30% position cap
+pushed it almost entirely into duration for fourteen years.
+
+**Momentum is the only strategy with a case, and it is unresolved.** It earned
+the highest strategy return at 7.49% and the best Calmar at 0.41, but at 0.18
+monthly turnover, roughly 216% annualised, it is far more cost-sensitive than
+anything else here. Its advantage over equal weight has not yet been tested
+against a realistic cost schedule. See the roadmap.
+
+### What this does not show
+
+The result is specific to one regime. 2012 to 2026 contained an exceptional US
+equity run and a single joint stock-bond drawdown. It is close to a worst case
+for multi-asset diversification, and a sample containing 2000-2002 or 2008
+would very likely reverse the ranking. This is evidence about a period, not a
+verdict on portfolio construction.
 
 ---
 
 ## Limitations
 
-- Backtested results do not account for market impact, borrow cost, or capacity constraints.
-- Point-in-time membership is reconstructed from public change histories and may contain small errors around index events.
-- Sentiment signals depend on model outputs that were trained on text distributions that may differ from the test period.
+- **Single regime.** The trading period is 2012-02 to 2026-07, an exceptional
+  US equity run containing one joint stock-bond drawdown. A sample spanning
+  2000-2002 or 2008 would plausibly reverse the ranking.
+- **Survivorship and selection.** The universe is a fixed list of twelve ETFs
+  that all exist today with long histories. That is itself a filter, applied
+  with hindsight, and it flatters the results.
+- **Cost model.** A flat bps charge on turnover ignores bid-ask spread, market
+  impact, and the fact that costs differ materially across asset classes.
+  Momentum is the line most exposed to this assumption.
+- **No borrowing or leverage.** Weights are long-only and sum to one, so the
+  volatility-matched comparison in the results section is arithmetic rather
+  than something the framework can actually execute.
+- **Capacity is not modelled.** Nothing here accounts for the size at which
+  these strategies would move the assets they trade.
 
 ---
 
