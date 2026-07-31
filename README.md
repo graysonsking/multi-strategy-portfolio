@@ -260,11 +260,17 @@ structurally underweight the asset doing the work. Minimum variance sat at 0.21
 beta with 4.57 effective holdings, meaning shrinkage plus the 30% position cap
 pushed it almost entirely into duration for fourteen years.
 
-**Momentum is the only strategy with a case, and it is unresolved.** It earned
-the highest strategy return at 7.49% and the best Calmar at 0.41, but at 0.18
-monthly turnover, roughly 216% annualised, it is far more cost-sensitive than
-anything else here. Its advantage over equal weight has not yet been tested
-against a realistic cost schedule. See the roadmap.
+**Momentum's advantage is leverage, not alpha.** It earned the highest strategy
+return at 7.49% and the best Calmar at 0.41, but it ran 11.66% volatility
+against equal weight's 8.56%. Its Sharpe was already lower at 0.68 versus 0.70,
+and a cost sweep widens the gap: at 25 bps 0.65 versus 0.70, at 50 bps 0.61
+versus 0.69. Scaling equal weight to matched volatility implies roughly 7.83%
+CAGR at 10 bps, above momentum's actual 7.49%. The raw return advantage
+survives to roughly 90 bps one-way; the risk-adjusted advantage never existed.
+
+The sweep also isolates cost sensitivity. Moving from 10 to 50 bps costs
+momentum 0.90 points of CAGR and equal weight 0.02, a 45x difference driven by
+216% annualised turnover. Both benchmarks are effectively unaffected.
 
 ### What this does not show
 
