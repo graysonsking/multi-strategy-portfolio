@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/30569156/README.md)
 # Multi-Strategy Portfolio
 
 A quantitative research framework for building, backtesting, and combining systematic trading strategies under a shared risk and portfolio construction layer.
